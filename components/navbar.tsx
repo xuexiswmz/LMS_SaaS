@@ -13,7 +13,6 @@ const Navbar = () => {
         </Link>
         <div className="flex items-center gap-4">
           <NavItems />
-          Sign In
         </div>
       </nav>
     </div>

@@ -1,13 +1,24 @@
-// AuthContext.tsx
+'use client'
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { AuthContextType, AuthError, Session } from "@/types/session";
 import { AuthCredentials, SessionUser, User } from "@/types/auth";
 import { supabase } from "@/lib/supabase";
 
-export const AuthContext = createContext<AuthContextType>(null!);
+export const AuthContext = createContext<AuthContextType>({
+  user:null,
+  session:null,
+  isLoading:true,
+  signIn:async ()=>({error:null,session:null,user:null}),
+  signOut:async ()=>({error:null}),
+  refreshSession:async ()=>{}
+});
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext)
+  if (!context){
+    throw new Error('useAuth must be used within an AuthProvider')
+  }
+  return context
 }
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
