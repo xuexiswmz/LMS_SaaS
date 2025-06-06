@@ -1,30 +1,51 @@
-'use client'
+"use client";
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { AuthContextType, AuthError, Session } from "@/types/session";
-import { AuthCredentials, SessionUser, User } from "@/types/auth";
+import { AuthContextType, AuthError } from "@/types/session";
+import { AuthCredentials } from "@/types/auth";
 import { supabase } from "@/lib/supabase";
+import { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
+
+// 定义与 Supabase 兼容的 SessionUser 类型
+type SessionUser = User & {
+  role?: string;
+  emailVerified: boolean;
+  phoneVerified: boolean;
+  factors?: any[];
+  identities?: any[];
+};
 
 export const AuthContext = createContext<AuthContextType>({
-  user:null,
-  session:null,
-  isLoading:true,
-  signIn:async ()=>({error:null,session:null,user:null}),
-  signOut:async ()=>({error:null}),
-  refreshSession:async ()=>{}
+  user: null,
+  session: null,
+  isLoading: true,
+  signIn: async () => ({ error: null, session: null, user: null }),
+  signOut: async () => ({ error: null }),
+  refreshSession: async () => {},
 });
 
 export function useAuth() {
-  const context = useContext(AuthContext)
-  if (!context){
-    throw new Error('useAuth must be used within an AuthProvider')
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
   }
-  return context
+  return context;
 }
-
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // 转换用户对象格式
+  const transformUser = (userData: User): SessionUser => {
+    return {
+      ...userData,
+      role: userData.role || userData.app_metadata?.role,
+      emailVerified: !!userData.email_confirmed_at,
+      phoneVerified: !!userData.phone_confirmed_at,
+      factors: userData.factors || [],
+      identities: userData.identities || [],
+    };
+  };
 
   // 初始化时检查现有会话
   useEffect(() => {
@@ -40,16 +61,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return;
       }
 
-      if (session) {
-        setSession({
-          access_token: session.access_token,
-          refresh_token: session.refresh_token,
-          token_type: "bearer",
-          expires_in: session.expires_in,
-          expires_at: session.expires_at,
-          user: transformUser(session.user),
-        });
-        setUser(transformUser(session.user));
+      if (session && session.user) {
+        const transformedUser = transformUser(session.user);
+        setSession(session);
+        setUser(transformedUser);
       }
       setIsLoading(false);
     };
@@ -58,23 +73,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     // 监听认证状态变化
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
-        if (newSession) {
-          const transformedUser = transformUser(newSession.user);
-          setSession({
-            access_token: newSession.access_token,
-            refresh_token: newSession.refresh_token,
-            token_type: "bearer",
-            expires_in: newSession.expires_in,
-            expires_at: newSession.expires_at,
-            user: transformedUser,
-          });
-          setUser(transformedUser);
-        } else {
+      async (event: AuthChangeEvent, newSession: Session | null) => {
+        console.log("Auth state changed:", event);
+
+        if (
+          event === "SIGNED_IN" ||
+          event === "TOKEN_REFRESHED" ||
+          event === "USER_UPDATED"
+        ) {
+          if (newSession && newSession.user) {
+            const transformedUser = transformUser(newSession.user);
+            setSession(newSession);
+            setUser(transformedUser);
+          }
+        } else if (event === "SIGNED_OUT") {
           setSession(null);
           setUser(null);
+        } else {
+          console.log("Other auth event:", event);
         }
-      }
+      },
     );
 
     return () => {
@@ -82,25 +100,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
-  // 转换用户对象格式
-  const transformUser = (userData: any): SessionUser => {
-    return {
-      ...userData,
-      role: userData.role || userData.app_metadata?.role,
-      emailVerified: userData.email_confirmed_at !== null,
-      phoneVerified: userData.phone_confirmed_at !== null,
-      factors: userData.factors || [],
-      identities: userData.identities || [],
-    };
-  };
-
   // 登录方法
   const signIn = async (credentials: AuthCredentials) => {
     setIsLoading(true);
     const result: {
-      error: AuthError;
+      error: AuthError | null;
       session: Session | null;
-      user: User | null;
+      user: SessionUser | null;
     } = {
       error: null,
       session: null,
@@ -137,21 +143,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           status: authResponse.error.status,
           __isAuthError: true,
         };
-      } else {
-        if (authResponse.data.session) {
-          const transformedUser = transformUser(authResponse.data.user);
-          const newSession = {
-            ...authResponse.data.session,
-            user: transformedUser,
-          };
-          result.session = newSession;
-          result.user = transformedUser;
-        }
+      } else if (authResponse.data?.session) {
+        const transformedUser = transformUser(authResponse.data.user);
+        result.session = authResponse.data.session;
+        result.user = transformedUser;
       }
     } catch (error: unknown) {
+      const err = error as Error;
       result.error = {
         name: "AuthError",
-        message: (error as Error).message || "Unknown authentication error",
+        message: err.message || "Unknown authentication error",
         __isAuthError: true,
       };
     } finally {
@@ -170,7 +171,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(null);
       return { error: error ? new Error(error.message) : null };
     } catch (error: unknown) {
-      // 将 unknown 类型的错误转换为 Error 类型
       const err = error instanceof Error ? error : new Error(String(error));
       return { error: err };
     } finally {
@@ -181,24 +181,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // 刷新会话
   const refreshSession = async () => {
     setIsLoading(true);
-    try {
-      const { data, error } = await supabase.auth.refreshSession();
+    const { data, error } = await supabase.auth.refreshSession();
 
-      if (error) throw error;
-
-      if (data.session) {
-        const transformedUser = transformUser(data.user);
-        setSession({
-          ...data.session,
-          user: transformedUser,
-        });
+    if (error) {
+      console.error("Refresh session error:", error);
+    } else {
+      if (data.session && data.session.user) {
+        const transformedUser = transformUser(data.session.user);
+        setSession(data.session);
         setUser(transformedUser);
       }
-    } catch (error) {
-      console.error("Refresh session error:", error);
-    } finally {
-      setIsLoading(false);
     }
+    setIsLoading(false);
   };
 
   const value: AuthContextType = {

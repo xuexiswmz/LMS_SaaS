@@ -1,33 +1,28 @@
-import { SessionUser, User, AuthCredentials } from "./auth";
+import { Session, User } from "@supabase/supabase-js";
+import {AuthCredentials} from "@/types/auth";
 
-//基础session类型
-export type Session = {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  expires_in: number;
-  expires_at?: number;
-  user: SessionUser;
-} | null;
-
-//Auth上下文类型
-export type AuthContextType = {
-  user: SessionUser | null;
-  session: Session;
-  isLoading: boolean;
-  signIn: (credentials: AuthCredentials) => Promise<{
-    error: AuthError | null;
-    session: Session | null;
-    user: User | null;
-  }>;
-  signOut: () => Promise<{ error: Error | null }>;
-  refreshSession: () => Promise<void>;
+export type SessionUser = User & {
+  role?: string;
+  emailVerified: boolean;
+  phoneVerified: boolean;
 };
 
-//Auth错误类型
 export type AuthError = {
   name: string;
   message: string;
   status?: number;
-  __isAuthError?: boolean;
-} | null;
+  __isAuthError: boolean;
+};
+
+export interface AuthContextType {
+  user: SessionUser | null;
+  session: Session | null;
+  isLoading: boolean;
+  signIn: (credentials: AuthCredentials) => Promise<{
+    error: AuthError | null;
+    session: Session | null;
+    user: SessionUser | null;
+  }>;
+  signOut: () => Promise<{ error: Error | null }>;
+  refreshSession: () => Promise<void>;
+}
