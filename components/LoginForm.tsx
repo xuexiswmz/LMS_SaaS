@@ -4,20 +4,14 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { supabase } from "@/lib/supabase";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "./ui/input";
+import { Form } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
-import { Label } from "@/components/ui/label";
-import CountdownTimer from "@/components/CountdownTimer";
 import { toast } from "sonner";
+import { EmailForm } from "@/components/login/EmailForm";
+import { PasswordForm } from "@/components/login/PasswordForm";
+import { OTPForm } from "@/components/login/OTPForm";
+import { OAuthButtons } from "@/components/login/OAuthButtons";
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -167,88 +161,19 @@ const LoginForm = () => {
             }
           }}
         >
-          <FormField
-            control={form.control}
-            name="email"
-            render={({ field, fieldState }) => (
-              <FormItem>
-                <FormLabel>Email</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="name@example.com"
-                    {...field}
-                    type="email"
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    autoCorrect="off"
-                    disabled={isLoading}
-                  />
-                </FormControl>
-                {fieldState.error && (
-                  <FormMessage>{fieldState.error.message}</FormMessage>
-                )}
-              </FormItem>
-            )}
-          />
+          <EmailForm control={form.control} isLoading={isLoading} />
           {loginMethod === "password" && (
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field, fieldState }) => (
-                <FormItem>
-                  <FormLabel>Password</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="********"
-                      {...field}
-                      type="password"
-                      disabled={isLoading}
-                    />
-                  </FormControl>
-                  {fieldState.error && (
-                    <FormMessage>{fieldState.error.message}</FormMessage>
-                  )}
-                </FormItem>
-              )}
-            />
+            <PasswordForm control={form.control} isLoading={isLoading} />
           )}
           {isOtpSent && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="flex-1 spacy-y-1">
-                  <Label htmlFor="otp">Verification Code</Label>
-                  <Input
-                    id="otp"
-                    placeholder="123456"
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value)}
-                    disabled={isLoading}
-                  />
-                </div>
-                {!canResend ? (
-                  <CountdownTimer
-                    initialSeconds={60}
-                    onComplete={() => setCanResend(true)}
-                    className="mt-4 h-10"
-                  />
-                ) : (
-                  <Button
-                    variant="outline"
-                    disabled={isLoading}
-                    onClick={async () => {
-                      setCanResend(false);
-                      await handleOtpLogin(form.getValues());
-                    }}
-                    className="mt-4 h-10"
-                  >
-                    Resend
-                  </Button>
-                )}
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Enter the 6-digit code sent to your email address.
-              </p>
-            </div>
+            <OTPForm
+              otpCode={otpCode}
+              setOtpCode={setOtpCode}
+              isLoading={isLoading}
+              canResend={canResend}
+              setCanResend={setCanResend}
+              handleResend={() => handleOtpLogin(form.getValues())}
+            />
           )}
 
           <div className="flex flex-col gap-2">
@@ -310,55 +235,7 @@ const LoginForm = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <Button
-          variant="outline"
-          onClick={() => handleOAuthLogin("github")}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <Image
-              src="/icons/spinner.svg"
-              alt="spinner"
-              width={20}
-              height={20}
-              className=" animate-spin"
-            />
-          ) : (
-            <Image
-              src="/icons/github.svg"
-              alt="github"
-              width={20}
-              height={20}
-            />
-          )}
-          Github
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => handleOAuthLogin("google")}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <Image
-              src="/icons/spinner.svg"
-              alt="spinner"
-              width={20}
-              height={20}
-              className=" animate-spin"
-            />
-          ) : (
-            <Image
-              src="/icons/google.svg"
-              alt="google"
-              width={20}
-              height={20}
-              className="w-auto"
-            />
-          )}
-          Google
-        </Button>
-      </div>
+      <OAuthButtons isLoading={isLoading} handleOAuthLogin={handleOAuthLogin} />
     </div>
   );
 };
